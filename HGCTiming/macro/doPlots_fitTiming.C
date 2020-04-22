@@ -43,9 +43,10 @@ float getXmax(TH1F* histo, float& YMax){
 
 
 
-void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_allEta"){
+void doPlots_fitTiming(){
   gROOT->Macro("/afs/cern.ch/user/a/amartell/public/setStyle.C");
-
+  std::string pdgID = std::to_string(22);
+  std::string optionType = "/afs/crc.nd.edu/user/a/adas/RainDeer/CMSSW_11_1_X_2020-04-10-2300/src/PlotDir";
   gStyle->SetOptStat(0);
   gStyle->SetOptTitle(0);
   
@@ -81,7 +82,7 @@ void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_
   //std::string pdgID = "22";
   
 
-  int nFiles = 3;
+  int nFiles = 2;
   std::vector<std::string> nameFiles;
   std::vector<float> ptValues;
   nameFiles.push_back("PDG_"+pdgID+"_pt5");
@@ -148,23 +149,27 @@ void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_
   
   //  std::string optionType = "TDRset_0PU_allEta";
 
-  std::string singleFitsFolderName = optionType+"/plotsAllHistos_"+pdgID;  
-  std::string plotFolder = optionType+"/plotsTime_"+pdgID;       
+  std::string singleFitsFolderName = optionType ; //+"/plotsAllHistos_"+pdgID;  
+  std::string plotFolder = optionType ; //+"/plotsTime_"+pdgID;       
   
-
+  /*
   TFile* inF[3];
   for(int ij=0; ij<nFiles; ++ij){
     inF[ij] = TFile::Open(("../test/"+optionType+"/"+"/OutTimeHGC_RecHits_"+nameFiles.at(ij)+"_200PU_AE.root").c_str());
   }
-  
-  std::cout << " >>> files loaded " << std::endl;
+  */
 
-  std::ofstream outFileLong[7];
+  TFile* inF[2];
+  inF[0] = TFile::Open("/afs/crc.nd.edu/user/a/adas/RainDeer/CMSSW_11_1_X_2020-04-10-2300/src/gurguri_stdmix.root","r");
+  inF[1] = TFile::Open("/afs/crc.nd.edu/user/a/adas/RainDeer/CMSSW_11_1_X_2020-04-10-2300/src/gurguri_justMix_premix.root", "r");
+  std::cout << " >>> files loaded " << std::endl;
+  
+  /*std::ofstream outFileLong[7];
   for(int ij=0; ij<nFiles; ++ij){
     outFileLong[ij].open((optionType+"/timingResults_"+nameFiles.at(ij)+".txt").c_str(), std::ios::out);
     std::cout << (optionType+"/timingResults_"+nameFiles.at(ij)+".txt").c_str() << std::endl; 
   }
-
+  */
   TH1F* hFractionEvents_HitsWithTime_Eta_dRadius;
   TH1F* hAverageTime_Eta_dRadius;
   TF1* hfithisto = new TF1("hfithisto", "gaus", -0.5, 1.);
@@ -175,7 +180,7 @@ void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_
   for(int iF=0; iF<nFiles; ++iF){
     std::cout << " >>> iF = " << iF << std::endl;
 
-    outFileLong[iF] << " eta " << " \t" << " rad " << " \t" << " res " <<" \t" << " eff " << std::endl;   
+    //outFileLong[iF] << " eta " << " \t" << " rad " << " \t" << " res " <<" \t" << " eff " << std::endl;   
 
     for(int ieta=0; ieta<numberOfBins; ++ieta){
       for(int iRad=0; iRad<nBinsRad; ++iRad){
@@ -204,8 +209,8 @@ void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_
 	  tg[iF][iRad]->SetPoint(ieta, binValue.at(ieta),  hfithisto2->GetParameter(2));                        
 	  tg[iF][iRad]->SetPointError(ieta, 0, hfithisto2->GetParError(2));     
 	    
-	  outFileLong[iF] << binValue.at(ieta) << " \t " << iRad << " \t " << hfithisto2->GetParameter(2) <<"+/-"<< hfithisto2->GetParError(2)
-			  << " \t " << efficiency<<"+/-" << std::endl;
+	  //outFileLong[iF] << binValue.at(ieta) << " \t " << iRad << " \t " << hfithisto2->GetParameter(2) <<"+/-"<< hfithisto2->GetParError(2)
+	  //<< " \t " << efficiency<<"+/-" << std::endl;
 
 	  tgM[iF][iRad]->SetPoint(ieta, binValue.at(ieta),  hfithisto2->GetParameter(1));
 	  tgM[iF][iRad]->SetPointError(ieta, 0, hfithisto2->GetParError(1));
@@ -223,10 +228,10 @@ void doPlots_fitTiming(std::string pdgID, std::string optionType = "in11X_200PU_
     }//loop over eta
   }//loop over files
 
-  
+  /*
   for(int iF=0; iF<nFiles; ++iF)
     outFileLong[iF].close();
-
+  */
 
   std::cout << " all done now print results " << std::endl;
 

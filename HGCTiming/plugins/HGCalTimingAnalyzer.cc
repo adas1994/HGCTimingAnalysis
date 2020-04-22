@@ -47,9 +47,9 @@
 #include "RecoLocalCalo/HGCalRecAlgos/interface/HGCalDepthPreClusterer.h"
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 
-#include "RecoParticleFlow/PFClusterProducer/plugins/SimMappers/ComputeClusterTime.h"
+//#include "RecoParticleFlow/PFClusterProducer/plugins/SimMappers/ComputeClusterTime.h"
 #include "HGCTimingAnalysis/HGCTiming/interface/UtilClasses.h"
-
+#include "RecoLocalCalo/HGCalRecProducers/interface/ComputeClusterTime.h"
 
 #include <vector>
 #include <string>
@@ -79,10 +79,13 @@ private:
   edm::EDGetTokenT<HGCRecHitCollection> _recHitsEE;
   edm::EDGetTokenT<HGCRecHitCollection> _recHitsFH;
   edm::EDGetTokenT<HGCRecHitCollection> _recHitsBH;
-  edm::EDGetTokenT<std::vector<TrackingVertex> > _vtx;
-  edm::EDGetTokenT<std::vector<TrackingParticle> > _part;
-  edm::EDGetTokenT<std::vector<CaloParticle> > _caloParticles;
-
+  edm::EDGetTokenT<std::vector<TrackingVertex> > _vtxMix;
+  edm::EDGetTokenT<std::vector<TrackingParticle> > _partMix;
+  edm::EDGetTokenT<std::vector<CaloParticle> > _caloParticlesMix;
+  edm::EDGetTokenT<std::vector<TrackingVertex> > _vtxMixData;
+  edm::EDGetTokenT<std::vector<TrackingParticle> > _partMixData;
+  edm::EDGetTokenT<std::vector<CaloParticle> > _caloParticlesMixData;
+  
   std::string                detector;
   int                        algo;
   HGCalDepthPreClusterer     pre;
@@ -118,7 +121,9 @@ private:
   TH1F* h_Vtx_dvx;
   TH1F* h_Vtx_dvy;
   TH1F* h_Vtx_dvz;
-
+  TH1F* h_rhTime;
+  TH1F* h_rhTimeFilter1;
+  TH1F* h_rhTimeFilter2;
 
   TProfile2D* cellThick_Rvseta;
   TProfile2D* cellThick_RvsLayer;
@@ -139,8 +144,20 @@ private:
 
   TH1F* hFractionHitsWithTime_Eta_dRadius[6][4];
   TH1F* hFractionEvents_HitsWithTime_Eta_dRadius[6][4];
+  TH2F* h2_PhiVsEta_CaloParts;
 
-
+  TH2F* h2_GenXY, h2_GenXYFilter1, h2_GenXYFilter2;
+  //TH2F* h2_recHXY; 
+  //TH2F* h2_recHXYFilter1;
+  TH2F* h2_recHXYFilter2;
+  TH1F* deltaRUnf;
+  TH1F* deltaRFiltered;
+  TH1F* h_rhZFiltered;
+  TH1F* h_rhZUnf;
+  TH1F* h_PhiUnfiltered;
+  TH1F* h_PhiFiltered;
+  TH1F* h_EtaUnfiltered;
+  TH1F* h_EtaFiltered;
   int totEvtsEtaRadius[6][4];
   int totEvtsEtaRadius_withTime[6][4];
 
@@ -157,6 +174,13 @@ private:
   bool debugCOUT3;
   bool debugCOUT4;
 
+  TH1F* fromAxisX;
+  TH1F* fromAxisY;
+  TH1F* fromAxisZ;
+
+  TH1F* toAxisX;
+  TH1F* toAxisY;
+  TH1F* toAxisZ;
 };  
 
 
@@ -201,10 +225,14 @@ HGCalTimingAnalyzer::HGCalTimingAnalyzer(const edm::ParameterSet& iConfig) :
     _recHitsBH = consumes<HGCRecHitCollection>(iConfig.getParameter<edm::InputTag>("HGCBHInput"));
     algo = 3;
   }
-  _vtx = consumes<std::vector<TrackingVertex> >(edm::InputTag("mix","MergedTrackTruth"));
-  _part = consumes<std::vector<TrackingParticle> >(edm::InputTag("mix","MergedTrackTruth"));
-  _caloParticles = consumes<std::vector<CaloParticle> >(edm::InputTag("mix","MergedCaloTruth"));
-
+  _vtxMix = consumes<std::vector<TrackingVertex> >(edm::InputTag("mix","MergedTrackTruth"));
+  _partMix = consumes<std::vector<TrackingParticle> >(edm::InputTag("mix","MergedTrackTruth"));
+  _caloParticlesMix = consumes<std::vector<CaloParticle> >(edm::InputTag("mix","MergedCaloTruth"));
+  
+  _vtxMixData = consumes<std::vector<TrackingVertex> >(edm::InputTag("mixData","MergedTrackTruth"));
+  _partMixData = consumes<std::vector<TrackingParticle> >(edm::InputTag("mixData","MergedTrackTruth"));
+  _caloParticlesMixData = consumes<std::vector<CaloParticle> >(edm::InputTag("mixData","MergedCaloTruth"));
+  
 
   //parameters to provide conversion GeV - MIP
   keV2fC[0] =  iConfig.getParameter<double>("HGCEE_keV2fC");
@@ -250,8 +278,35 @@ HGCalTimingAnalyzer::HGCalTimingAnalyzer(const edm::ParameterSet& iConfig) :
   h_Vtx_dvx = fs->make<TH1F>("h_Vtx_dvx", "", 1000, -10., 10.);
   h_Vtx_dvy = fs->make<TH1F>("h_Vtx_dvy", "", 1000, -10., 10.);
   h_Vtx_dvz = fs->make<TH1F>("h_Vtx_dvz", "", 1000, -10., 10.);
+  h2_PhiVsEta_CaloParts = fs->make<TH2F>("h2_PhiVsEta_CaloParts", "", 500, -2., 2., 500, 1., 3.);
+  h_rhTime  = fs->make<TH1F>("rhTime", "", 100, -10., 10.);
+  h_rhTimeFilter1 = fs->make<TH1F>("rhTimeFilter1", "", 100, -10., 10.);
+  h_rhTimeFilter2 = fs->make<TH1F>("rhTimeFilter2", "", 100, -10., 10.);
+  
+  deltaRFiltered  = fs->make<TH1F>("deltaRFiltered", "", 15, -5., 10.);
+  deltaRUnf       = fs->make<TH1F>("deltaRUnf", "", 100, -5., 95.);
+  //h_rhZFiltered
+  h_rhZFiltered   = fs->make<TH1F>("rhZFiltered", "", 200, 270., 470.);
+  h_rhZUnf        = fs->make<TH1F>("rhZUnf", "", 501, -1., 500.);
 
+  h_PhiUnfiltered = fs->make<TH1F>("PhiUnfiltered", "", 120, -3., 3.);
+  h_PhiFiltered   = fs->make<TH1F>("PhiFiltered", "", 120, -3., 3.);
+  h_EtaUnfiltered = fs->make<TH1F>("EtaUnfiltered", "", 120., -3., 3.);
+  h_EtaFiltered   = fs->make<TH1F>("EtaFiltered", "", 120., -3., 3.);
 
+  fromAxisX       = fs->make<TH1F>("fromAxisX", "", 200, -100., 100.);
+  fromAxisY       = fs->make<TH1F>("fromAxisY", "", 200, -100., 100.);
+  fromAxisZ       = fs->make<TH1F>("fromAxisZ", "", 1000, -500., 500.);
+  toAxisX         = fs->make<TH1F>("toAxisX", "", 200, -100., 100.);
+  toAxisY         = fs->make<TH1F>("toAxisY", "", 200, -100., 100.);
+  toAxisZ         = fs->make<TH1F>("toAxisZ", "", 1000, -500., 500.);
+  //h2_GENXY        = fs->make<TH2F>("GenXY", "", 200, -2., 2., 200, -2., 2.);
+  //h2_GENXYFilter1 = fs->make<TH2F>("GenXYFilter1", "", 200, -2., 2., 200, -2., 2.);
+  //h2_GENXYFilter2 = fs->make<TH2F>("GenXYFilter2", "", 200, -2., 2., 200, -2., 2.);
+
+  //h2_recHXY        = fs->make<TH2F>("recHXY", "", 200, -2., 2., 200, 1., 5.);
+  //h2_recHXYFilter1 = fs->make<TH2F>("recHXYFilter1", "", 200, -2., 2., 200, 1., 5.);
+  h2_recHXYFilter2 = fs->make<TH2F>("recHXYFilter2", "", 200, -2., 2., 200, 1., 5.);
 
   for(int ieta=0; ieta<nBinsEta; ++ieta){    
     if(debugCOUT) std::cout<< " ieta from = " << (binStart+ieta*binWidth) << " to " << binStart+binWidth+ieta*binWidth << std::endl;
@@ -323,16 +378,68 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
   Handle<HGCRecHitCollection> recHitHandleFH;
   Handle<HGCRecHitCollection> recHitHandleBH;
 
-  Handle<std::vector<TrackingVertex> > vtxHandle;
-  Handle<std::vector<TrackingParticle> > partHandle;
-  iEvent.getByToken(_vtx,vtxHandle);
-  iEvent.getByToken(_part,partHandle);
-  const std::vector<TrackingVertex>& vtxs = *vtxHandle;
-  const std::vector<TrackingParticle>& part = *partHandle;
+  Handle<std::vector<TrackingVertex> > vtxHandleMix;
+  Handle<std::vector<TrackingParticle> > partHandleMix;
+  iEvent.getByToken(_vtxMix,vtxHandleMix);
+  iEvent.getByToken(_partMix,partHandleMix);
+  const std::vector<TrackingVertex>& vtxsMix = *vtxHandleMix;
+  const std::vector<TrackingParticle>& partMix = *partHandleMix;
 
-  Handle<std::vector<CaloParticle> > caloParticleHandle;
-  iEvent.getByToken(_caloParticles, caloParticleHandle);
-  const std::vector<CaloParticle>& caloParticles = *caloParticleHandle;
+  Handle<std::vector<CaloParticle> > caloParticleHandleMix;
+  iEvent.getByToken(_caloParticlesMix, caloParticleHandleMix);
+  const std::vector<CaloParticle>& caloParticlesMix = *caloParticleHandleMix;
+  
+  Handle<std::vector<TrackingVertex> > vtxHandleMixData;
+  Handle<std::vector<TrackingParticle> > parthandleMixData;
+  Handle<std::vector<CaloParticle> > caloParticleHandleMixData;
+  /*
+  iEvent.getByToken(_vtxMixData, vtxHandleMixData);
+  iEvent.getByToken(_partMixData, parthandleMixData);
+  iEvent.getByToken(_caloParticlesMixData, caloParticleHandleMixData);
+  */
+  const std::vector<TrackingVertex>& vtxsMixData = *vtxHandleMixData;
+  const std::vector<TrackingParticle>& partMixData = *parthandleMixData;
+  const std::vector<CaloParticle>& caloPartsMixData = *caloParticleHandleMixData;
+  
+  std::vector<TrackingVertex> vtxsCombined;
+  std::vector<TrackingParticle> partsCombined;
+  std::vector<CaloParticle> caloPartsCombined;
+
+  // --- Combine TrackingVertex from Mix and MixData label
+  /*for(std::vector<TrackingVertex>::const_iterator itv = vtxsMixData.begin(); itv!=vtxsMixData.end(); ++itv){
+    vtxsCombined.push_back(*itv);
+    }*/
+  for(std::vector<TrackingVertex>::const_iterator itv = vtxsMix.begin(); itv!=vtxsMix.end(); ++itv){
+    vtxsCombined.push_back(*itv);
+    }
+  /*for(std::vector<TrackingVertex>::const_iterator itv = vtxsMixData.begin(); itv!=vtxsMixData.end(); ++itv){
+    vtxsCombined.push_back(*itv);
+    }*/
+  // --- Combine TrackingParticle from Mix and MixData label
+  /*for(std::vector<TrackingParticle>::const_iterator itp = partMixData.begin(); itp!=partMixData.end(); ++itp){
+    partsCombined.push_back(*itp);
+    }*/
+  for(std::vector<TrackingParticle>::const_iterator itp = partMix.begin(); itp!=partMix.end(); ++itp){
+    partsCombined.push_back(*itp);
+  }
+  /*for(std::vector<TrackingParticle>::const_iterator itp = partMixData.begin(); itp!=partMixData.end(); ++itp){
+    partsCombined.push_back(*itp);
+    }*/
+  // --- Combine CaloParticle from Mix and MixData label
+
+  /*for(std::vector<CaloParticle>::const_iterator itc = caloPartsMixData.begin(); itc!=caloPartsMixData.end(); ++itc){
+    caloPartsCombined.push_back(*itc);
+    }*/
+  for(std::vector<CaloParticle>::const_iterator itc = caloParticlesMix.begin(); itc!=caloParticlesMix.end(); ++itc){
+    caloPartsCombined.push_back(*itc);
+  }
+  /*for(std::vector<CaloParticle>::const_iterator itc = caloPartsMixData.begin(); itc!=caloPartsMixData.end(); ++itc){
+    caloPartsCombined.push_back(*itc);
+    }*/
+  const std::vector<TrackingVertex>& vtxs        = (vtxsCombined) ;
+  const std::vector<TrackingParticle>& part      = (partsCombined) ;
+  const std::vector<CaloParticle>& caloParticles = (caloPartsCombined) ;
+  
 
 
   float vx = 0.;
@@ -453,7 +560,7 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 				<< it_caloPart->pdgId() << " energy = " << it_caloPart->pt() << " eventId().event() = " << it_caloPart->eventId().event() 
 				<< " eventId().bunchCrossing() = " << it_caloPart->eventId().bunchCrossing() << " Z vtx = " << vz << std::endl; 
     if(CaloPartPDGID == 22 && (simClusterRefVector.size() != 2 || std::abs(it_caloPart->pdgId()) != 22 || it_caloPart->pt() != particleGenPt) && 
-       (it_caloPart->eta() != 1.75 || it_caloPart->eta() != 2.7)) continue;
+       (it_caloPart->eta() < 1.75 || it_caloPart->eta() > 2.75)) continue;
     if(CaloPartPDGID == 211 && (simClusterRefVector.size() != 1 || std::abs(it_caloPart->pdgId()) != 211 || it_caloPart->pt() != particleGenPt) && 
        (it_caloPart->eta() != 1.75 || it_caloPart->eta() != 2.7)) continue;
     if(CaloPartPDGID == 130 && (simClusterRefVector.size() > 1 || std::abs(it_caloPart->pdgId()) != 130 || it_caloPart->pt() != particleGenPt) && 
@@ -537,7 +644,7 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     std::cout<< " evtGood = " << evtGood << " simClusterRefVectorChosen.size = " << simClusterRefVectorChosen.size() << " eta = " << simClusterBeg.eta() << std::endl;
   }
 
-
+ 
   //need to build a vector with time of recHits
   //then compute time on the vector
   std::vector<float> timePerEtaRadiusDistr[6][4];
@@ -566,7 +673,9 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     fromAxis[1] = (-1.*yGen);
     fromAxis[2] = (-1.*zGen);
   }
-
+  fromAxisX->Fill(fromAxis[0]);
+  fromAxisY->Fill(fromAxis[1]);
+  fromAxisZ->Fill(fromAxis[2]);
 
   //check all the hits in the cone around the gen direction  
   
@@ -586,8 +695,8 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
   
 
   TLorentzVector testBetaCorrection;
-  
-  /////////////////////////////
+  h2_PhiVsEta_CaloParts->Fill(phiGen, etaGen);
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////
   for(std::map<DetId, const HGCRecHit*>::iterator iop=hitmap.begin(); iop != hitmap.end(); ++iop){
     const HGCalDetId hitid = iop->first;
     const HGCRecHit* hit = iop->second;
@@ -598,25 +707,49 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     float rhEnergy = hit->energy();
     float rhTime = hit->time() - timeOffset;
     float CPfraction = 0.;
-    float rhX = recHitTools.getPosition(hitid).x();
-    float rhY = recHitTools.getPosition(hitid).y();
-    int rhL = recHitTools.getLayerWithOffset(hitid);
+    float rhX   = recHitTools.getPosition(hitid).x();
+    float rhY   = recHitTools.getPosition(hitid).y();
+    int rhL     = recHitTools.getLayerWithOffset(hitid);
     float rhEta = recHitTools.getEta(recHitTools.getPosition(hitid));
-    float rhZ = utilsMet.layerToZ(rhL, rhEta);
-    float rhPt = rhEnergy/cosh(rhEta);
+    float rhPhi = recHitTools.getPhi(recHitTools.getPosition(hitid));
+    float rhZ   = utilsMet.layerToZ(rhL, rhEta);
+    float rhPt  = rhEnergy/cosh(rhEta);
 
+    h_rhTime->Fill(rhTime);
+    //h_rhZUnf->Fill(rhZ);
+    //h_PhiUnfiltered->Fill(rhPhi);
+    //h_EtaUnfiltered->Fill(rhEta);
+    //if(rhZ > 300) std::cout<<rhZ<<std::endl;
+    //h2_recHXY->Fill(rhPhi, rhEta);
     if(debugCOUT3)    std::cout << " loop over hits eta = " << rhEta  << std::endl;
     if(rhEta < 0 && etaGen > 0) continue;
     if(rhEta > 0 && etaGen < 0) continue;
-
+    h_rhTimeFilter1->Fill(rhTime);
+    //h_rhZUnf->Fill(rhZ);
+    //h_PhiUnfiltered->Fill(rhPhi);
+    //h_EtaUnfiltered->Fill(rhEta);
+    
     std::array<double,3> to{ {0., 0., rhZ} };
     utilsMet.layerIntersection(to, fromAxis, vtx);
     float deltaR = sqrt(pow(to[0] - rhX, 2) + pow(to[1] - rhY, 2));
+    toAxisX->Fill(to[0]);
+    toAxisY->Fill(to[1]);
+    toAxisZ->Fill(to[2]);
+    deltaRUnf->Fill(deltaR);
+    h_rhZUnf->Fill(rhZ);
+    h_PhiUnfiltered->Fill(rhPhi);
+    h_EtaUnfiltered->Fill(rhEta);
+
 
     //save time => no interest wrt large radii
     if(deltaR > 5) continue;
-
-    
+    h_PhiFiltered->Fill(rhPhi);
+    h_EtaFiltered->Fill(rhEta);
+    deltaRFiltered->Fill(deltaR);
+    h_rhTimeFilter2->Fill(rhTime);
+    h2_recHXYFilter2->Fill(rhPhi, rhEta);
+    h_rhZFiltered->Fill(rhZ);
+    //std::cout<<rhZ<<std::endl;
     int etaBin = int((std::abs(etaGen) - binStart) / binWidth);
     if(debugCOUT4) std::cout << " etaBin = " << etaBin << std::endl;
     int iRadBin = -1;
@@ -687,12 +820,15 @@ HGCalTimingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     }//radius ok
   }// loop over rechits
 
-
+  hgcalsimclustertime::ComputeClusterTime compute_clustertime;
   for(int iet=0; iet<nBinsEta; ++iet){
     for(int irad=0; irad<2; ++irad){
       
       float time  = -99.;
-      if(timePerEtaRadiusDistr[iet][irad].size() >= 3) time = hgcalsimclustertime::fixSizeHighestDensity(timePerEtaRadiusDistr[iet][irad]);
+      std::pair<float, float> time_pair;
+      //hgcalsimclustertime
+      if(timePerEtaRadiusDistr[iet][irad].size() >= 3) time_pair = compute_clustertime.fixSizeHighestDensity(timePerEtaRadiusDistr[iet][irad]);
+      time = time_pair.first;
       timePerEtaRadiusAvgInt[iet][irad] = time;
     }
   }

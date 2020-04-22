@@ -11,12 +11,15 @@ process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 process.load('Configuration.StandardSequences.EndOfProcess_cff')
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-
+sample_prefile =  cms.untracked.vstring('file:/hadoop/store/user/adas/EfficiencyD41OldPreMixMethod/PreMixOld/Step4/2020_04_04_06_33_44/step4_RAW2DIGI_L1Reco_RECO_RECOSIM_PAT_VALIDATION_DQM122.root')
+sample_stdfile = cms.untracked.vstring('file:/hadoop/store/user/adas/EfficiencyD41OldPreMixMethod/StandardMixOld/Step3/2020_03_26_07_31_03/step3_RAW2DIGI_L1Reco_RECO_RECOSIM_PAT_VALIDATION_DQM_PU106.root')
 
 import FWCore.Utilities.FileUtils as FileUtils
-readFiles = cms.untracked.vstring()
-readFiles.extend(FileUtils.loadListFromFile ('INPUTFILELIST') )
+#readFiles = cms.untracked.vstring()
+#readFiles.extend(FileUtils.loadListFromFile ('INPUTFILELIST') )
+readFiles = cms.untracked.vstring('file:INPUTFILELIST')
 
+#readFiles = sample_prefile
 
 process.source = cms.Source("PoolSource",
     # replace 'myfile.root' with the source file you want to use
@@ -34,6 +37,9 @@ process.source = cms.Source("PoolSource",
         
 
 from HGCTimingAnalysis.HGCTiming.timeRecHitEstimator_cfi import HGCalTimeEstimator
+PGENPT = 5.
+CALOPARTPDGID = 22#130/310 for K_S and K_L
+
 
 process.ana = cms.EDAnalyzer('HGCalTimingAnalyzer',
                              detector = cms.string("all"),
@@ -58,7 +64,8 @@ process.ana = cms.EDAnalyzer('HGCalTimingAnalyzer',
                              HGCHB_keV2MIP = HGCalTimeEstimator.HGCHB_keV2MIP
                              )
 
+#OUTFILE.root
 process.TFileService = cms.Service("TFileService",
-                                   fileName = cms.string("file:OUTFILE.root")
+                                   fileName = cms.string("file:TimingValidation.root")
                                    )
 process.p = cms.Path(process.ana)

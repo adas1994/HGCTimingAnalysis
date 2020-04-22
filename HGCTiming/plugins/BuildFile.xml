@@ -8,6 +8,7 @@
 <use   name="Geometry/Records"/>
 <use   name="SimDataFormats/CaloAnalysis"/>
 <use   name="CommonTools/UtilAlgos"/>
+<use   name="RecoLocalCalo/HGCalRecProducers"/>
 <library   file="*.cc" name="HGCTimingAnalysisHGCTimingPlugins">
   <flags   EDM_PLUGIN="1"/>
 </library>
